@@ -13,7 +13,7 @@ pub struct ApiSuccess {
 }
 
 impl ApiSuccess {
-    pub fn new(message: &str) -> ApiSuccess {
+    pub fn default(message: &str) -> ApiSuccess {
         ApiSuccess {
             json: json!({
                 "success": message

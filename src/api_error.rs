@@ -20,6 +20,15 @@ impl ApiError {
             status
         }
     }
+
+    pub fn default(message: &str) -> ApiError {
+        ApiError {
+            json: json!({
+                "error": message
+            }),
+            status: Status::InternalServerError
+        }
+    }
 }
 
 impl<'r> Responder<'r> for ApiError {

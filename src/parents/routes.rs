@@ -1,7 +1,8 @@
 use std::fs::File;
 use std::path::Path;
-use rocket::http::hyper::StatusCode::InternalServerError;
+use rocket::http::ContentType;
 use rocket_contrib::json::Json;
+use rocket_upload::MultipartDatas;
 use crate::api_error::ApiError;
 use crate::api_success::ApiSuccess;
 use crate::{manager, Status};
@@ -21,36 +22,75 @@ pub fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
     }
 
     init_dirs(name)
-        .map_err(|err| ApiError::new(err.to_string().as_str(), Status::InternalServerError))?;
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     let parent_file_path_str = &manager::get_parent_file_path(name);
     let parent_file = File::create(parent_file_path_str)
-        .map_err(|err| ApiError::new(err.to_string().as_str(), Status::InternalServerError))?;
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     serde_json::to_writer_pretty(parent_file, parent)
-        .map_err(|err| ApiError::new(err.to_string().as_str(), Status::InternalServerError))?;
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    Ok(ApiSuccess::new("The parent has been created."))
+    Ok(ApiSuccess::default("The parent has been created."))
+}
 
-    // let mkdir_result = init_dirs(name);
-    //
-    // match mkdir_result {
-    //     Ok(_) => {
-    //         let parent_file_path_str = &manager::get_parent_file_path(name);
-    //         let parent_file_path = Path::new(parent_file_path_str);
-    //         let writing_result = serde_json::to_writer_pretty(File::create(parent_file_path).unwrap(), &data.into_inner());
-    //
-    //         match writing_result {
-    //             Ok(_) => {
-    //                 ApiResponse::success("The parent has been created.", Status::Ok)
-    //             }
-    //             Err(error) => {
-    //                 ApiResponse::error(error.to_string().as_str(), Status::InternalServerError)
-    //             }
-    //         }
-    //     }
-    //     Err(error) => {
-    //         ApiResponse::error(error.to_string().as_str(), Status::InternalServerError)
-    //     }
-    // }
+#[put("/<name>/update", data = "<data>")]
+pub fn update(name: String, data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
+    if !manager::parent_exist(&name) {
+        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
+    }
+
+    let parent_path = &manager::get_parent_path(&name);
+    let parent = &data.into_inner();
+
+    let new_name = &parent.name;
+    let new_parent_path = manager::get_parent_path(new_name);
+
+    std::fs::rename(parent_path, new_parent_path)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let new_parent_file_path_str = &manager::get_parent_file_path(new_name);
+    let new_parent_file = File::create(new_parent_file_path_str)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    serde_json::to_writer_pretty(new_parent_file, &parent)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    Ok(ApiSuccess::default("The parent has been updated."))
+}
+
+#[post("/<name>/plugins/push", data = "<data>")]
+pub fn push_plugin(name: String, _content_type: &ContentType, data: MultipartDatas) -> Result<ApiSuccess, ApiError> {
+    if !manager::parent_exist(&name) {
+        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
+    }
+
+    if data.files.is_empty() {
+        return Err(ApiError::new("No plugin found in the body.", Status::BadRequest));
+    }
+
+    let plugin_path_str = &manager::get_parent_plugins_path(&name);
+    let plugin_path = Path::new(&plugin_path_str);
+
+    data.files[0].persist(plugin_path);
+
+    Ok(ApiSuccess::default("The plugin has been pushed."))
+}
+
+#[post("/<name>/main/push", data = "<data>")]
+pub fn push_file(name: String, _content_type: &ContentType, data: MultipartDatas) -> Result<ApiSuccess, ApiError> {
+    if !manager::parent_exist(&name) {
+        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
+    }
+
+    if data.files.is_empty() {
+        return Err(ApiError::new("No file found in the body.", Status::BadRequest));
+    }
+
+    let parent_path_str = &manager::get_parent_path(&name);
+    let parent_path = Path::new(parent_path_str);
+
+    data.files[0].persist(parent_path);
+
+    Ok(ApiSuccess::default("The file has been pushed.")
 }
