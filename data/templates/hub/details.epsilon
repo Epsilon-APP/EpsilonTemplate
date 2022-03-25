@@ -1,0 +1,20 @@
+{
+  "name": "hub",
+  "parent": "spigot-1.8.8",
+  "slots": 10,
+  "resources": {
+    "minimum": {
+      "cpu": 1,
+      "ram": 1024
+    },
+    "maximum": {
+      "cpu": 1,
+      "ram": 1024
+    }
+  },
+  "labels": {
+    "server_slots": 30,
+    "labels_de_mon_choix": "true",
+    "author": "EliXorZz"
+  }
+}

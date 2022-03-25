@@ -3,13 +3,11 @@ use rocket::http::{ContentType, Status};
 use rocket::response::Responder;
 use rocket_contrib::json;
 use rocket_contrib::json::JsonValue;
-use serde_derive::Serialize;
-use serde_derive::Deserialize;
+use serde_json::Value;
 
-#[derive(Serialize, Deserialize)]
 pub struct ApiSuccess {
     pub json: JsonValue,
-    // pub status: Status
+    pub status: Status
 }
 
 impl ApiSuccess {
@@ -18,7 +16,14 @@ impl ApiSuccess {
             json: json!({
                 "success": message
             }),
-            // status: Status::Ok
+            status: Status::Ok
+        }
+    }
+
+    pub fn data(data: Value) -> ApiSuccess {
+        ApiSuccess {
+            json: JsonValue::from(data),
+            status: Status::Ok
         }
     }
 }

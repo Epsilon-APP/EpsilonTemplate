@@ -1,6 +1,5 @@
 use std::path::Path;
 
-
 // PARENTS
 
 pub const PARENTS_DIR: &str = "./data/parents";
@@ -25,9 +24,7 @@ pub fn parent_exist(name: &str) -> bool {
     parent_file_path.exists()
 }
 
-
 // TEMPLATES
-
 
 pub fn get_template_path(name: &str) -> String {
     format!("{}/{}", TEMPLATES_DIR, name)

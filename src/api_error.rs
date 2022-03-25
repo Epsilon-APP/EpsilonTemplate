@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter};
+
 use rocket::{Request, Response, response};
 use rocket::http::{ContentType, Status};
 use rocket::response::Responder;
