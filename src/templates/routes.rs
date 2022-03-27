@@ -16,6 +16,7 @@ use zip::write::FileOptions;
 use zip::ZipWriter;
 
 use crate::manager;
+use crate::parents::parent::Parent;
 use crate::templates::template::Template;
 use crate::utils::api_error::ApiError;
 use crate::utils::api_success::ApiSuccess;
@@ -28,6 +29,13 @@ fn init_dirs(name: &str) -> std::io::Result<()> {
 fn get_template_obj(name: &str) -> Result<Template, Error> {
     let details_file_path_str = manager::get_details_file_path(name);
     let file = File::open(&details_file_path_str)?;
+
+    Ok(serde_json::from_reader(&file)?)
+}
+
+fn get_template_parent_obj(template: &Template) -> Result<Parent, Error> {
+    let parent_file_path_str = manager::get_parent_file_path(&template.parent);
+    let file = File::open(&parent_file_path_str)?;
 
     Ok(serde_json::from_reader(&file)?)
 }
@@ -86,7 +94,13 @@ pub async fn get_templates() -> Result<ApiSuccess, ApiError> {
         let current_template_result = get_template_obj(directory_name);
 
         if let Ok(..) = current_template_result {
-            templates.push(current_template_result.unwrap());
+            let mut current_template = current_template_result.unwrap();
+            let current_template_parent = get_template_parent_obj(&current_template)
+                .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+            current_template.t = Some(current_template_parent.t);
+
+            templates.push(current_template);
         }
     }
 
@@ -102,8 +116,13 @@ pub async fn get_template(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let current_template =
+    let mut current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let current_template_parent = get_template_parent_obj(&current_template)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    current_template.t = Some(current_template_parent.t);
 
     Ok(ApiSuccess::data(json!(current_template)))
 }

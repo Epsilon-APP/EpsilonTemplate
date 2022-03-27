@@ -2,13 +2,13 @@ use rocket::serde::Deserialize;
 use rocket::serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
-pub struct Resource {
-    pub minimum: ResourceInfo,
-    pub maximum: ResourceInfo,
+pub struct Resources {
+    pub minimum: ResourcesInfo,
+    pub maximum: ResourcesInfo,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResourceInfo {
+pub struct ResourcesInfo {
     pub cpu: u8,
     pub ram: u32,
 }

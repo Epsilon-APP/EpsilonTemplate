@@ -1,3 +1,3 @@
-pub mod resource;
-pub mod template;
+pub mod resources;
 pub mod routes;
+pub mod template;
