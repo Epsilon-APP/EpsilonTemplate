@@ -275,6 +275,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
         buildargs: build_args,
         rm: true,
         forcerm: true,
+        pull: true,
         ..Default::default()
     };
 
