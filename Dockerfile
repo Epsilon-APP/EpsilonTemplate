@@ -1,8 +1,7 @@
-FROM rustlang/rust:nightly
+FROM rust:latest
 
 COPY ./ ./
 
-RUN rustc --version
-RUN cargo +nightly build --release
+RUN cargo build --release
 
 CMD ["./target/release/epsilon_template"]
