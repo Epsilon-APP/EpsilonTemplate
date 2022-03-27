@@ -297,7 +297,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     let mut contents = Vec::new();
-    File::open(archive_file_path_str)
+    File::open(&archive_file_path_str)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?
         .read_to_end(&mut contents)
         .unwrap();
