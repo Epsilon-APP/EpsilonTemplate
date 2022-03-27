@@ -285,12 +285,14 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let archive_file = File::create(&archive_file_path_str)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    let mut a = Builder::new(archive_file);
+    let mut builder = Builder::new(archive_file);
 
-    a.append_file("Dockerfile", &mut dockerfile)
+    builder
+        .append_file("Dockerfile", &mut dockerfile)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    a.finish()
+    builder
+        .finish()
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     let mut contents = Vec::new();
