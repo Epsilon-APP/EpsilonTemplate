@@ -1,5 +1,5 @@
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
+use rocket::serde::Deserialize;
+use rocket::serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
 pub struct Resource {
@@ -10,5 +10,5 @@ pub struct Resource {
 #[derive(Serialize, Deserialize)]
 pub struct ResourceInfo {
     pub cpu: u8,
-    pub ram: u32
+    pub ram: u32,
 }

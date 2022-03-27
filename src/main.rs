@@ -1,15 +1,13 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
+#![feature(async_stream)]
 #[macro_use]
 extern crate rocket;
 
 mod manager;
 mod parents;
-
-mod api_error;
-mod api_success;
 mod templates;
+mod utils;
 
+use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
 use rocket::routes;
 
@@ -18,8 +16,17 @@ fn ping() -> Status {
     Status::Ok
 }
 
-fn main() {
-    rocket::ignite()
+#[launch]
+fn rocket() -> _ {
+    let limit = Limits::default()
+        .limit("file", 20.megabytes())
+        .limit("data-form", 20.megabytes());
+
+    let config = rocket::Config::figment()
+        .merge(("address", "0.0.0.0"))
+        .merge(("limits", limit));
+
+    rocket::custom(config)
         .mount("/", routes![ping])
         .mount(
             "/parents",
@@ -39,8 +46,8 @@ fn main() {
                 templates::routes::update,
                 templates::routes::push_plugin,
                 templates::routes::push_file,
-                templates::routes::zip,
+                templates::routes::to_zip,
+                templates::routes::build
             ],
         )
-        .launch();
 }

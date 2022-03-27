@@ -1,5 +1,5 @@
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
+use rocket::serde::Deserialize;
+use rocket::serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
 pub struct Parent {
@@ -7,11 +7,11 @@ pub struct Parent {
 
     #[serde(rename = "type")]
     pub t: Type,
-    pub description: String
+    pub description: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Type {
     Server,
-    Proxy
+    Proxy,
 }

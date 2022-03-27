@@ -13,8 +13,8 @@
     }
   },
   "labels": {
-    "server_slots": 30,
     "labels_de_mon_choix": "true",
-    "author": "EliXorZz"
+    "author": "EliXorZz",
+    "server_slots": 30
   }
 }

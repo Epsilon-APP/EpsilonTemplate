@@ -1,19 +1,18 @@
-use crate::api_error::ApiError;
-use crate::api_success::ApiSuccess;
 use crate::parents::parent::Parent;
+use crate::utils::api_error::ApiError;
+use crate::utils::api_success::ApiSuccess;
+use crate::utils::file_upload::Upload;
 use crate::{manager, Status};
-use rocket::http::ContentType;
-use rocket_contrib::json::Json;
-use rocket_upload::MultipartDatas;
+use rocket::form::Form;
+use rocket::serde::json::{serde_json, Json};
 use std::fs::File;
-use std::path::Path;
 
 fn init_dirs(name: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(manager::get_parent_plugins_path(name))
 }
 
 #[post("/create", data = "<data>")]
-pub fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
+pub async fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
     let parent = data.into_inner();
     let name = &parent.name;
 
@@ -34,7 +33,7 @@ pub fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
 }
 
 #[put("/<name>/update", data = "<data>")]
-pub fn update(name: String, data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
+pub async fn update(name: String, data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
     if !manager::parent_exist(&name) {
         return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
     }
@@ -59,51 +58,42 @@ pub fn update(name: String, data: Json<Parent>) -> Result<ApiSuccess, ApiError> 
 }
 
 #[post("/<name>/plugins/push", data = "<data>")]
-pub fn push_plugin(
-    name: String,
-    _content_type: &ContentType,
-    data: MultipartDatas,
-) -> Result<ApiSuccess, ApiError> {
+pub async fn push_plugin(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSuccess, ApiError> {
     if !manager::parent_exist(&name) {
         return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
     }
 
-    if data.files.is_empty() {
-        return Err(ApiError::new(
-            "No plugin found in the body.",
-            Status::BadRequest,
-        ));
-    }
+    let file = &mut data.upload;
+    let file_name = file.name().unwrap();
 
     let plugin_path_str = manager::get_parent_plugins_path(&name);
-    let plugin_path = Path::new(&plugin_path_str);
+    let plugin_file_path = format!("{}/{}.jar", plugin_path_str, file_name);
 
-    data.files[0].persist(plugin_path);
+    file.persist_to(plugin_file_path)
+        .await
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::default("The plugin has been pushed."))
 }
-
+//
 #[post("/<name>/main/push", data = "<data>")]
-pub fn push_file(
-    name: String,
-    _content_type: &ContentType,
-    data: MultipartDatas,
-) -> Result<ApiSuccess, ApiError> {
+pub async fn push_file(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSuccess, ApiError> {
     if !manager::parent_exist(&name) {
         return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
     }
 
-    if data.files.is_empty() {
-        return Err(ApiError::new(
-            "No file found in the body.",
-            Status::BadRequest,
-        ));
-    }
+    let file = &mut data.upload;
+    let file_name = file.name().unwrap();
+    let file_path = file.path().unwrap();
+    let file_extension_os_str = file_path.extension().unwrap();
+    let file_extension = file_extension_os_str.to_str().unwrap();
 
     let parent_path_str = manager::get_parent_path(&name);
-    let parent_path = Path::new(&parent_path_str);
+    let new_file_path = format!("{}/{}.{}", parent_path_str, file_name, file_extension);
 
-    data.files[0].persist(parent_path);
+    file.persist_to(new_file_path)
+        .await
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::default("The file has been pushed."))
 }
