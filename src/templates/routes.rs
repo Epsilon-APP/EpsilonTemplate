@@ -263,15 +263,24 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let docker = Docker::connect_with_http_defaults().unwrap();
 
-    let image_name = "localhost:5000/epsilon:latest";
+    let registry_host =
+        std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
+    let registry_username =
+        std::env::var("REGISTRY_USERNAME").unwrap_or_else(|_| "admin".to_string());
+    let registry_password =
+        std::env::var("REGISTRY_PASSWORD").unwrap_or_else(|_| "admin".to_string());
+
+    let api_host = std::env::var("API_HOST").unwrap_or_else(|_| "localhost:8000".to_string());
+
+    let image_name = format!("{}/epsilon:latest", &registry_host);
     let mut build_args = HashMap::new();
 
     build_args.insert("TEMPLATE_NAME", name.as_str());
-    build_args.insert("API_HOST", "host.docker.internal:8000");
+    build_args.insert("API_HOST", api_host.as_str());
 
     let build_options = BuildImageOptions {
         dockerfile: "Dockerfile",
-        t: image_name,
+        t: &image_name,
         buildargs: build_args,
         rm: true,
         forcerm: true,
@@ -289,7 +298,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let mut builder = Builder::new(archive_file);
 
     builder
-        .append_file("Dockerfile", &mut dockerfile)
+        .append_file("../../docker/Dockerfile", &mut dockerfile)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     builder
@@ -313,13 +322,13 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     }
 
     let credentials = DockerCredentials {
-        username: Some("admin".to_string()),
-        password: Some("admin".to_string()),
+        username: Some(registry_username),
+        password: Some(registry_password),
         ..Default::default()
     };
 
     let mut push_stream = docker.push_image(
-        image_name,
+        &image_name,
         None::<PushImageOptions<String>>,
         Some(credentials),
     );
@@ -338,7 +347,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     };
 
     let remove_image_stream = docker
-        .remove_image(image_name, Some(remove_image_options), None)
+        .remove_image(&image_name, Some(remove_image_options), None)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
