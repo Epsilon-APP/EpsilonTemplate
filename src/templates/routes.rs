@@ -261,12 +261,7 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 
 #[post("/<name>/build")]
 pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
-    let docker = Docker::connect_with_http_defaults().map_err(|_err| {
-        ApiError::new(
-            "An error was occurred on connecting to Docker DAEMON.",
-            Status::InternalServerError,
-        )
-    })?;
+    let docker = Docker::connect_with_http_defaults().unwrap();
 
     let image_name = "localhost:5000/epsilon:latest";
     let mut build_args = HashMap::new();
@@ -307,7 +302,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let mut build_stream = docker.build_image(build_options, None, Some(contents.into()));
 
     while let Some(build_info) = build_stream.next().await {
-        let build_info = build_info.unwrap();
+        let build_info = build_info.map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
         if let Some(error) = build_info.error {
             return Err(ApiError::default(error.as_str()));
@@ -326,10 +321,10 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
         Some(credentials),
     );
 
-    while let Some(build_info) = push_stream.next().await {
-        let build_info = build_info.unwrap();
+    while let Some(push_info) = push_stream.next().await {
+        let push_info = push_info.map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-        if let Some(error) = build_info.error {
+        if let Some(error) = push_info.error {
             return Err(ApiError::default(error.as_str()));
         }
     }
