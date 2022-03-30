@@ -212,8 +212,11 @@ pub async fn push_plugin(name: String, mut data: Form<Upload<'_>>) -> Result<Api
 //
 #[post("/<name>/main/push", data = "<data>")]
 pub async fn push_file(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSuccess, ApiError> {
-    if !manager::parent_exist(&name) {
-        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
+    if !manager::template_exist(&name) {
+        return Err(ApiError::new(
+            "The template doesn't exist.",
+            Status::NotFound,
+        ));
     }
 
     let file = &mut data.upload;
