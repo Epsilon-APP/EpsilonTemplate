@@ -4,8 +4,10 @@ debug/
 target/
 .idea/
 
-/data/templates
-/data/parents
+/data/templates/
+/data/parents/
+
+/tmp/
 
 /data/archive.tar
 
