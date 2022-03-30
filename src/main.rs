@@ -25,8 +25,8 @@ fn rocket() -> _ {
     init_base_dirs().expect("Failed to create base directories");
 
     let limits = Limits::default()
-        .limit("file", 20.megabytes())
-        .limit("data-form", 20.megabytes());
+        .limit("file", 100.megabytes())
+        .limit("data-form", 100.megabytes());
 
     let config = rocket::Config::figment()
         .merge(("address", "0.0.0.0"))
