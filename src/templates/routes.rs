@@ -285,7 +285,7 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 
 #[post("/<name>/build")]
 pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
-    let docker = Docker::connect_with_http_defaults().unwrap();
+    let docker = Docker::connect_with_socket_defaults().unwrap();
 
     let registry_host =
         std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
