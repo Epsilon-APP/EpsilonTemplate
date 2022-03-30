@@ -24,13 +24,13 @@ fn ping() -> Status {
 fn rocket() -> _ {
     init_base_dirs().expect("Failed to create base directories");
 
-    let limit = Limits::default()
+    let limits = Limits::default()
         .limit("file", 20.megabytes())
         .limit("data-form", 20.megabytes());
 
     let config = rocket::Config::figment()
         .merge(("address", "0.0.0.0"))
-        .merge(("limits", limit));
+        .merge(("limits", limits));
 
     rocket::custom(config)
         .mount("/", routes![ping])
