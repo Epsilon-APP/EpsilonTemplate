@@ -10,6 +10,11 @@ use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
 use rocket::routes;
 
+fn init_base_dirs() -> std::io::Result<()> {
+    std::fs::create_dir_all(manager::PARENTS_DIR)?;
+    std::fs::create_dir_all(manager::TEMPLATES_DIR)
+}
+
 #[get("/ping")]
 fn ping() -> Status {
     Status::Ok
@@ -17,6 +22,8 @@ fn ping() -> Status {
 
 #[launch]
 fn rocket() -> _ {
+    init_base_dirs().expect("Failed to create base directories");
+
     let limit = Limits::default()
         .limit("file", 20.megabytes())
         .limit("data-form", 20.megabytes());
