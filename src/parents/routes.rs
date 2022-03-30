@@ -64,10 +64,11 @@ pub async fn push_plugin(name: String, mut data: Form<Upload<'_>>) -> Result<Api
     }
 
     let file = &mut data.upload;
-    let file_name = file.name().unwrap();
+    let raw_name = file.raw_name().unwrap();
+    let file_name = raw_name.dangerous_unsafe_unsanitized_raw();
 
     let plugin_path_str = manager::get_parent_plugins_path(&name);
-    let plugin_file_path = format!("{}/{}.jar", plugin_path_str, file_name);
+    let plugin_file_path = format!("{}/{}", plugin_path_str, file_name);
 
     file.persist_to(plugin_file_path)
         .await
@@ -83,13 +84,11 @@ pub async fn push_file(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSu
     }
 
     let file = &mut data.upload;
-    let file_name = file.name().unwrap();
-    let file_path = file.path().unwrap();
-    let file_extension_os_str = file_path.extension().unwrap();
-    let file_extension = file_extension_os_str.to_str().unwrap();
+    let raw_name = file.raw_name().unwrap();
+    let file_name = raw_name.dangerous_unsafe_unsanitized_raw();
 
     let parent_path_str = manager::get_parent_path(&name);
-    let new_file_path = format!("{}/{}.{}", parent_path_str, file_name, file_extension);
+    let new_file_path = format!("{}/{}", parent_path_str, file_name);
 
     file.persist_to(new_file_path)
         .await
