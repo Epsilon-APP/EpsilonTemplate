@@ -6,9 +6,10 @@ mod parents;
 mod templates;
 mod utils;
 
+use crate::utils::api_error::ApiError;
 use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
-use rocket::routes;
+use rocket::{routes, Request};
 
 fn init_base_dirs() -> std::io::Result<()> {
     std::fs::create_dir_all(manager::PARENTS_DIR)?;
@@ -18,6 +19,11 @@ fn init_base_dirs() -> std::io::Result<()> {
 #[get("/ping")]
 fn ping() -> Status {
     Status::Ok
+}
+
+#[catch(default)]
+fn default_catcher(status: Status, _request: &Request) -> ApiError {
+    ApiError::new("An error is occurred with the server.", status)
 }
 
 #[launch]
@@ -33,6 +39,7 @@ fn rocket() -> _ {
         .merge(("limits", limits));
 
     rocket::custom(config)
+        .register("/", catchers![default_catcher])
         .mount("/", routes![ping])
         .mount(
             "/parents",

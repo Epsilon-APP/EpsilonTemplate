@@ -296,7 +296,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
 
     let api_host = std::env::var("API_HOST").unwrap_or_else(|_| "localhost:8000".to_string());
 
-    let image_name = format!("{}/epsilon:latest", &registry_host);
+    let image_name = format!("{}/{}:latest", &registry_host, &name);
     let mut build_args = HashMap::new();
 
     build_args.insert("TEMPLATE_NAME", name.as_str());
