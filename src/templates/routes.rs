@@ -285,7 +285,15 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 
 #[post("/<name>/build")]
 pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
+    if !manager::template_exist(&name) {
+        return Err(ApiError::new(
+            "The template doesn't exist.",
+            Status::NotFound,
+        ));
+    }
+
     let docker = Docker::connect_with_socket_defaults().unwrap();
+
     let current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
