@@ -286,6 +286,15 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 #[post("/<name>/build")]
 pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let docker = Docker::connect_with_socket_defaults().unwrap();
+    let current_template =
+        get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let resources = &current_template.resources;
+    let minimum_resources = &resources.minimum;
+    let maximum_resources = &resources.maximum;
+
+    let min_ram = &minimum_resources.ram.to_string();
+    let max_ram = &maximum_resources.ram.to_string();
 
     let registry_host =
         std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
@@ -301,6 +310,9 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
 
     build_args.insert("TEMPLATE_NAME", name.as_str());
     build_args.insert("API_HOST", api_host.as_str());
+
+    build_args.insert("MIN_RAM", min_ram.as_str());
+    build_args.insert("MAX_RAM", max_ram.as_str());
 
     let build_options = BuildImageOptions {
         dockerfile: "Dockerfile",
