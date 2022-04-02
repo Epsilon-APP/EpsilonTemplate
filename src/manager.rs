@@ -5,6 +5,7 @@ use std::path::Path;
 pub const PARENTS_DIR: &str = "./data/parents";
 pub const TEMPLATES_DIR: &str = "./data/templates";
 pub const DATA_DIR: &str = "./data";
+pub const TMP_DIR: &str = "./tmp";
 
 pub fn get_parent_path(name: &str) -> String {
     format!("{}/{}", PARENTS_DIR, name)

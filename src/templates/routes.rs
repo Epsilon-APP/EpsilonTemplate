@@ -94,11 +94,7 @@ pub async fn get_templates() -> Result<ApiSuccess, ApiError> {
         let current_template_result = get_template_obj(directory_name);
 
         if let Ok(..) = current_template_result {
-            let mut current_template = current_template_result.unwrap();
-            let current_template_parent = get_template_parent_obj(&current_template)
-                .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-            current_template.t = Some(current_template_parent.t);
+            let current_template = current_template_result.unwrap();
 
             templates.push(current_template);
         }
@@ -116,20 +112,15 @@ pub async fn get_template(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let mut current_template =
+    let current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    let current_template_parent = get_template_parent_obj(&current_template)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    current_template.t = Some(current_template_parent.t);
 
     Ok(ApiSuccess::data(json!(current_template)))
 }
 
 #[post("/create", data = "<data>")]
 pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
-    let template = data.into_inner();
+    let mut template = data.into_inner();
 
     if !manager::parent_exist(&template.parent) {
         return Err(ApiError::new(
@@ -137,6 +128,11 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
             Status::BadRequest,
         ));
     }
+
+    let current_template_parent = get_template_parent_obj(&template)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    template.t = Some(current_template_parent.t);
 
     let template_name = &template.name;
 
@@ -255,7 +251,7 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
         ));
     }
 
-    let tmp_path_str = format!("./tmp/{}", name);
+    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, name);
     let template_parent_path = manager::get_parent_path(&template_parent_name);
 
     std::fs::create_dir_all(&tmp_path_str)
@@ -335,7 +331,12 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let dockerfile_path = format!("{}/Dockerfile", manager::DATA_DIR);
     let mut dockerfile = File::open(&dockerfile_path).unwrap();
 
-    let archive_file_path_str = format!("{}/archive.tar", manager::DATA_DIR);
+    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, &name);
+
+    std::fs::create_dir_all(&tmp_path_str)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let archive_file_path_str = format!("{}/{}.tar", tmp_path_str, &name);
     let archive_file = File::create(&archive_file_path_str)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
