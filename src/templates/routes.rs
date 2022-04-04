@@ -203,7 +203,11 @@ pub async fn get_templates() -> Result<ApiSuccess, ApiError> {
         let current_template_result = get_template_obj(directory_name);
 
         if let Ok(..) = current_template_result {
-            let current_template = current_template_result.unwrap();
+            let mut current_template = current_template_result.unwrap();
+            let current_template_parent = get_template_parent_obj(&current_template)
+                .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+            current_template.t = Some(current_template_parent.t);
 
             templates.push(current_template);
         }
@@ -221,15 +225,20 @@ pub async fn get_template(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let current_template =
+    let mut current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let current_template_parent = get_template_parent_obj(&current_template)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    current_template.t = Some(current_template_parent.t);
 
     Ok(ApiSuccess::data(json!(current_template)))
 }
 
 #[post("/create", data = "<data>")]
 pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
-    let mut template = data.into_inner();
+    let template = data.into_inner();
 
     if !manager::parent_exist(&template.parent) {
         return Err(ApiError::new(
@@ -241,7 +250,6 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
     let current_template_parent = get_template_parent_obj(&template)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    template.t = Some(current_template_parent.t);
     let template_name = &template.name;
 
     if manager::template_exist(template_name) {
