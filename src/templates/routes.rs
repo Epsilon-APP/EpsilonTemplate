@@ -9,7 +9,7 @@ use rocket::serde::json::serde_json::json;
 use rocket::serde::json::{serde_json, Json};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Error, Read, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use zip::write::FileOptions;
@@ -38,6 +38,115 @@ fn get_template_parent_obj(template: &Template) -> Result<Parent, Error> {
     let file = File::open(&parent_file_path_str)?;
 
     Ok(serde_json::from_reader(&file)?)
+}
+
+async fn build_template_dockerfile(current_template: &Template) -> Result<(), Error> {
+    let docker = Docker::connect_with_socket_defaults().unwrap();
+
+    let resources = &current_template.resources;
+    let minimum_resources = &resources.minimum;
+    let maximum_resources = &resources.maximum;
+
+    let min_ram = &minimum_resources.ram.to_string();
+    let max_ram = &maximum_resources.ram.to_string();
+
+    let registry_host =
+        std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
+    let registry_username =
+        std::env::var("REGISTRY_USERNAME").unwrap_or_else(|_| "admin".to_string());
+    let registry_password =
+        std::env::var("REGISTRY_PASSWORD").unwrap_or_else(|_| "admin".to_string());
+
+    let api_host = std::env::var("API_HOST").unwrap_or_else(|_| "localhost:8000".to_string());
+
+    let template_name = &current_template.name;
+
+    let image_name = format!("{}/{}:latest", &registry_host, template_name);
+    let mut build_args = HashMap::new();
+
+    build_args.insert("TEMPLATE_NAME", template_name.as_str());
+    build_args.insert("DEFAULT_MAP_NAME", current_template.default_map.as_str());
+    build_args.insert("API_HOST", api_host.as_str());
+
+    build_args.insert("MIN_RAM", min_ram.as_str());
+    build_args.insert("MAX_RAM", max_ram.as_str());
+
+    let build_options = BuildImageOptions {
+        dockerfile: "Dockerfile",
+        t: &image_name,
+        buildargs: build_args,
+        rm: true,
+        forcerm: true,
+        pull: true,
+        ..Default::default()
+    };
+
+    let dockerfile_path = format!("{}/Dockerfile", manager::DATA_DIR);
+    let mut dockerfile = File::open(&dockerfile_path).unwrap();
+
+    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, template_name);
+
+    std::fs::create_dir_all(&tmp_path_str)?;
+
+    let archive_file_path_str = format!("{}/{}.tar", tmp_path_str, template_name);
+    let archive_file = File::create(&archive_file_path_str)?;
+
+    let mut builder = Builder::new(archive_file);
+
+    builder.append_file("Dockerfile", &mut dockerfile)?;
+
+    builder.finish()?;
+
+    let mut contents = Vec::new();
+    File::open(&archive_file_path_str)?
+        .read_to_end(&mut contents)
+        .unwrap();
+
+    let mut build_stream = docker.build_image(build_options, None, Some(contents.into()));
+
+    while let Some(build_info) = build_stream.next().await {
+        let build_info = build_info.map_err(|err| Error::new(ErrorKind::Other, err))?;
+
+        if let Some(error) = build_info.error {
+            return Err(Error::new(ErrorKind::Other, error));
+        }
+    }
+
+    let credentials = DockerCredentials {
+        username: Some(registry_username),
+        password: Some(registry_password),
+        ..Default::default()
+    };
+
+    let mut push_stream = docker.push_image(
+        &image_name,
+        None::<PushImageOptions<String>>,
+        Some(credentials),
+    );
+
+    while let Some(push_info) = push_stream.next().await {
+        let push_info = push_info.map_err(|err| Error::new(ErrorKind::Other, err))?;
+
+        if let Some(error) = push_info.error {
+            return Err(Error::new(ErrorKind::Other, error));
+        }
+    }
+
+    let remove_image_options = RemoveImageOptions {
+        force: true,
+        ..Default::default()
+    };
+
+    let remove_image_stream = docker
+        .remove_image(&image_name, Some(remove_image_options), None)
+        .await
+        .map_err(|err| Error::new(ErrorKind::Other, err))?;
+
+    if remove_image_stream.is_empty() {
+        return Err(Error::new(ErrorKind::Other, "Failed to remove image"));
+    }
+
+    Ok(())
 }
 
 fn write_paths_in_zip(
@@ -199,6 +308,10 @@ pub async fn update(name: String, data: Json<Template>) -> Result<ApiSuccess, Ap
     serde_json::to_writer_pretty(new_details_file, &template)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
+    build_template_dockerfile(&template)
+        .await
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
     Ok(ApiSuccess::default("The template has been updated."))
 }
 
@@ -306,117 +419,12 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let docker = Docker::connect_with_socket_defaults().unwrap();
-
     let current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    let resources = &current_template.resources;
-    let minimum_resources = &resources.minimum;
-    let maximum_resources = &resources.maximum;
-
-    let min_ram = &minimum_resources.ram.to_string();
-    let max_ram = &maximum_resources.ram.to_string();
-
-    let registry_host =
-        std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
-    let registry_username =
-        std::env::var("REGISTRY_USERNAME").unwrap_or_else(|_| "admin".to_string());
-    let registry_password =
-        std::env::var("REGISTRY_PASSWORD").unwrap_or_else(|_| "admin".to_string());
-
-    let api_host = std::env::var("API_HOST").unwrap_or_else(|_| "localhost:8000".to_string());
-
-    let image_name = format!("{}/{}:latest", &registry_host, &name);
-    let mut build_args = HashMap::new();
-
-    build_args.insert("TEMPLATE_NAME", name.as_str());
-    build_args.insert("API_HOST", api_host.as_str());
-
-    build_args.insert("MIN_RAM", min_ram.as_str());
-    build_args.insert("MAX_RAM", max_ram.as_str());
-
-    let build_options = BuildImageOptions {
-        dockerfile: "Dockerfile",
-        t: &image_name,
-        buildargs: build_args,
-        rm: true,
-        forcerm: true,
-        pull: true,
-        ..Default::default()
-    };
-
-    let dockerfile_path = format!("{}/Dockerfile", manager::DATA_DIR);
-    let mut dockerfile = File::open(&dockerfile_path).unwrap();
-
-    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, &name);
-
-    std::fs::create_dir_all(&tmp_path_str)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    let archive_file_path_str = format!("{}/{}.tar", tmp_path_str, &name);
-    let archive_file = File::create(&archive_file_path_str)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    let mut builder = Builder::new(archive_file);
-
-    builder
-        .append_file("Dockerfile", &mut dockerfile)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    builder
-        .finish()
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    let mut contents = Vec::new();
-    File::open(&archive_file_path_str)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?
-        .read_to_end(&mut contents)
-        .unwrap();
-
-    let mut build_stream = docker.build_image(build_options, None, Some(contents.into()));
-
-    while let Some(build_info) = build_stream.next().await {
-        let build_info = build_info.map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-        if let Some(error) = build_info.error {
-            return Err(ApiError::default(error.as_str()));
-        }
-    }
-
-    let credentials = DockerCredentials {
-        username: Some(registry_username),
-        password: Some(registry_password),
-        ..Default::default()
-    };
-
-    let mut push_stream = docker.push_image(
-        &image_name,
-        None::<PushImageOptions<String>>,
-        Some(credentials),
-    );
-
-    while let Some(push_info) = push_stream.next().await {
-        let push_info = push_info.map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-        if let Some(error) = push_info.error {
-            return Err(ApiError::default(error.as_str()));
-        }
-    }
-
-    let remove_image_options = RemoveImageOptions {
-        force: true,
-        ..Default::default()
-    };
-
-    let remove_image_stream = docker
-        .remove_image(&image_name, Some(remove_image_options), None)
+    build_template_dockerfile(&current_template)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    if remove_image_stream.is_empty() {
-        return Err(ApiError::default("An error occurred on removing image."));
-    }
 
     Ok(ApiSuccess::default(
         "The image has been built on the registry.",
