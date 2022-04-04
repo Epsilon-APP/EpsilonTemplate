@@ -2,6 +2,7 @@
 extern crate rocket;
 
 mod manager;
+mod maps;
 mod parents;
 mod templates;
 mod utils;
@@ -13,6 +14,7 @@ use rocket::{routes, Request};
 
 fn init_base_dirs() -> std::io::Result<()> {
     std::fs::create_dir_all(manager::PARENTS_DIR)?;
+    std::fs::create_dir_all(manager::MAPS_DIR)?;
     std::fs::create_dir_all(manager::TEMPLATES_DIR)
 }
 
@@ -62,5 +64,9 @@ fn rocket() -> _ {
                 templates::routes::to_zip,
                 templates::routes::build
             ],
+        )
+        .mount(
+            "/maps",
+            routes![maps::routes::push_map, maps::routes::get_map],
         )
 }

@@ -158,15 +158,15 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
 
 #[put("/<name>/update", data = "<data>")]
 pub async fn update(name: String, data: Json<Template>) -> Result<ApiSuccess, ApiError> {
-    let template = data.into_inner();
-    let template_path_str = manager::get_template_path(&name);
-
     if !manager::template_exist(&name) {
         return Err(ApiError::new(
             "The template doesn't exist.",
             Status::NotFound,
         ));
     }
+
+    let template = data.into_inner();
+    let template_path_str = manager::get_template_path(&name);
 
     let new_name = &template.name;
     let new_template_path_str = manager::get_template_path(new_name);

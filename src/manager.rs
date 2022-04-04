@@ -6,6 +6,7 @@ pub const PARENTS_DIR: &str = "./data/parents";
 pub const TEMPLATES_DIR: &str = "./data/templates";
 pub const DATA_DIR: &str = "./data";
 pub const TMP_DIR: &str = "./tmp";
+pub const MAPS_DIR: &str = "./data/maps";
 
 pub fn get_parent_path(name: &str) -> String {
     format!("{}/{}", PARENTS_DIR, name)
@@ -45,4 +46,17 @@ pub fn template_exist(name: &str) -> bool {
     let parent_file_path = Path::new(parent_file_path_str);
 
     parent_file_path.exists()
+}
+
+// MAPS
+
+pub fn get_map_path(name: &str) -> String {
+    format!("{}/{}.zip", MAPS_DIR, name)
+}
+
+pub fn map_exist(name: &str) -> bool {
+    let map_path_str = &get_map_path(name);
+    let map_path = Path::new(map_path_str);
+
+    map_path.exists()
 }
