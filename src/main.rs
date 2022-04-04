@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+mod config;
 mod manager;
 mod maps;
 mod parents;
@@ -47,7 +48,6 @@ fn rocket() -> _ {
             "/parents",
             routes![
                 parents::routes::create,
-                parents::routes::update,
                 parents::routes::push_plugin,
                 parents::routes::push_file
             ],

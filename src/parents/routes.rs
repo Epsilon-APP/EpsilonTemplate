@@ -32,31 +32,6 @@ pub async fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
     Ok(ApiSuccess::default("The parent has been created."))
 }
 
-#[put("/<name>/update", data = "<data>")]
-pub async fn update(name: String, data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
-    if !manager::parent_exist(&name) {
-        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
-    }
-
-    let parent_path = manager::get_parent_path(&name);
-    let parent = data.into_inner();
-
-    let new_name = &parent.name;
-    let new_parent_path = manager::get_parent_path(new_name);
-
-    std::fs::rename(parent_path, new_parent_path)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    let new_parent_file_path_str = manager::get_parent_file_path(new_name);
-    let new_parent_file = File::create(&new_parent_file_path_str)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    serde_json::to_writer_pretty(new_parent_file, &parent)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-    Ok(ApiSuccess::default("The parent has been updated."))
-}
-
 #[post("/<name>/plugins/push", data = "<data>")]
 pub async fn push_plugin(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSuccess, ApiError> {
     if !manager::parent_exist(&name) {
