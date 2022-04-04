@@ -133,7 +133,6 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     template.t = Some(current_template_parent.t);
-
     let template_name = &template.name;
 
     if manager::template_exist(template_name) {
@@ -141,6 +140,25 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
             "The template already exists.",
             Status::Conflict,
         ));
+    }
+
+    let default_map_name = &template.default_map;
+    let maps_name = &template.maps;
+
+    if !manager::map_exist(default_map_name) {
+        return Err(ApiError::new(
+            "The specified default map doesn't exist.",
+            Status::BadRequest,
+        ));
+    }
+
+    for map_name in maps_name {
+        if !manager::map_exist(map_name) {
+            return Err(ApiError::new(
+                "A specified map doesn't exist.",
+                Status::BadRequest,
+            ));
+        }
     }
 
     init_dirs(template_name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
