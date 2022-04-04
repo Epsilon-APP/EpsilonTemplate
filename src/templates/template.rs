@@ -13,6 +13,8 @@ pub struct Template {
     #[serde(rename = "type")]
     pub t: Option<Type>,
     pub slots: u16,
+    pub default_map: String,
+    pub maps: Vec<String>,
     pub resources: Resources,
     pub labels: HashMap<String, Value>,
 }
