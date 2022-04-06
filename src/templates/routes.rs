@@ -251,15 +251,7 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let default_map_name = &template.default_map;
     let maps_name = &template.maps;
-
-    if !manager::map_exist(default_map_name) {
-        return Err(ApiError::new(
-            "The specified default map doesn't exist.",
-            Status::BadRequest,
-        ));
-    }
 
     for map_name in maps_name {
         if !manager::map_exist(map_name) {
