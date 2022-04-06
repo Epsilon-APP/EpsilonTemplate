@@ -17,8 +17,8 @@ impl Config {
             .unwrap_or_else(|_| default_registry_username.to_string());
         let registry_password = std::env::var("REGISTRY_PASSWORD")
             .unwrap_or_else(|_| default_registry_password.to_string());
-        let registry_host = std::env::var("REGISTRY_PASSWORD")
-            .unwrap_or_else(|_| default_registry_host.to_string());
+        let registry_host =
+            std::env::var("REGISTRY_HOST").unwrap_or_else(|_| default_registry_host.to_string());
         let api_host = std::env::var("API_HOST").unwrap_or_else(|_| default_api_host.to_string());
 
         Config {
