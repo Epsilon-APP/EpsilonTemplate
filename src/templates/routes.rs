@@ -7,6 +7,7 @@ use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::serde_json::json;
 use rocket::serde::json::{serde_json, Json};
+use rocket::State;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Write};
@@ -15,12 +16,12 @@ use tar::Builder;
 use zip::write::FileOptions;
 use zip::ZipWriter;
 
-use crate::manager;
 use crate::parents::parent::Parent;
 use crate::templates::template::Template;
 use crate::utils::api_error::ApiError;
 use crate::utils::api_success::ApiSuccess;
 use crate::utils::file_upload::Upload;
+use crate::{manager, Config};
 
 fn init_dirs(name: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(manager::get_template_plugins_path(name))
@@ -40,7 +41,10 @@ fn get_template_parent_obj(template: &Template) -> Result<Parent, Error> {
     Ok(serde_json::from_reader(&file)?)
 }
 
-async fn build_template_dockerfile(current_template: &Template) -> Result<(), Error> {
+async fn build_template_dockerfile(
+    current_template: &Template,
+    config: &Config,
+) -> Result<(), Error> {
     let docker = Docker::connect_with_socket_defaults().unwrap();
 
     let resources = &current_template.resources;
@@ -50,23 +54,14 @@ async fn build_template_dockerfile(current_template: &Template) -> Result<(), Er
     let min_ram = &minimum_resources.ram.to_string();
     let max_ram = &maximum_resources.ram.to_string();
 
-    let registry_host =
-        std::env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".to_string());
-    let registry_username =
-        std::env::var("REGISTRY_USERNAME").unwrap_or_else(|_| "admin".to_string());
-    let registry_password =
-        std::env::var("REGISTRY_PASSWORD").unwrap_or_else(|_| "admin".to_string());
-
-    let api_host = std::env::var("API_HOST").unwrap_or_else(|_| "localhost:8000".to_string());
-
     let template_name = &current_template.name;
 
-    let image_name = format!("{}/{}:latest", &registry_host, template_name);
+    let image_name = format!("{}/{}:latest", config.registry_host, template_name);
     let mut build_args = HashMap::new();
 
     build_args.insert("TEMPLATE_NAME", template_name.as_str());
     build_args.insert("DEFAULT_MAP_NAME", current_template.default_map.as_str());
-    build_args.insert("API_HOST", api_host.as_str());
+    build_args.insert("API_HOST", config.api_host.as_str());
 
     build_args.insert("MIN_RAM", min_ram.as_str());
     build_args.insert("MAX_RAM", max_ram.as_str());
@@ -113,8 +108,8 @@ async fn build_template_dockerfile(current_template: &Template) -> Result<(), Er
     }
 
     let credentials = DockerCredentials {
-        username: Some(registry_username),
-        password: Some(registry_password),
+        username: Some(String::from(&config.registry_username)),
+        password: Some(String::from(&config.registry_password)),
         ..Default::default()
     };
 
@@ -247,9 +242,6 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let current_template_parent = get_template_parent_obj(&template)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
     let template_name = &template.name;
 
     if manager::template_exist(template_name) {
@@ -292,7 +284,11 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
 }
 
 #[put("/<name>/update", data = "<data>")]
-pub async fn update(name: String, data: Json<Template>) -> Result<ApiSuccess, ApiError> {
+pub async fn update(
+    name: String,
+    data: Json<Template>,
+    config: &State<Config>,
+) -> Result<ApiSuccess, ApiError> {
     if !manager::template_exist(&name) {
         return Err(ApiError::new(
             "The template doesn't exist.",
@@ -316,7 +312,7 @@ pub async fn update(name: String, data: Json<Template>) -> Result<ApiSuccess, Ap
     serde_json::to_writer_pretty(new_details_file, &template)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    build_template_dockerfile(&template)
+    build_template_dockerfile(&template, config)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
@@ -419,7 +415,7 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 }
 
 #[post("/<name>/build")]
-pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
+pub async fn build(name: String, config: &State<Config>) -> Result<ApiSuccess, ApiError> {
     if !manager::template_exist(&name) {
         return Err(ApiError::new(
             "The template doesn't exist.",
@@ -430,7 +426,7 @@ pub async fn build(name: String) -> Result<ApiSuccess, ApiError> {
     let current_template =
         get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    build_template_dockerfile(&current_template)
+    build_template_dockerfile(&current_template, config)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 

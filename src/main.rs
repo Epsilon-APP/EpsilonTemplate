@@ -8,6 +8,7 @@ mod parents;
 mod templates;
 mod utils;
 
+use crate::config::Config;
 use crate::utils::api_error::ApiError;
 use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
@@ -33,16 +34,19 @@ fn default_catcher(status: Status, _request: &Request) -> ApiError {
 fn rocket() -> _ {
     init_base_dirs().expect("Failed to create base directories");
 
+    let config = Config::new("admin", "admin", "localhost:5000", "localhost:8000");
+
     let limits = Limits::default()
         .limit("file", 100.megabytes())
         .limit("data-form", 100.megabytes());
 
-    let config = rocket::Config::figment()
+    let rocket_config = rocket::Config::figment()
         .merge(("address", "0.0.0.0"))
         .merge(("limits", limits));
 
-    rocket::custom(config)
+    rocket::custom(rocket_config)
         .register("/", catchers![default_catcher])
+        .manage(config)
         .mount("/", routes![ping])
         .mount(
             "/parents",
