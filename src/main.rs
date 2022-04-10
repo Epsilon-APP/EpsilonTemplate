@@ -13,10 +13,12 @@ use crate::utils::api_error::ApiError;
 use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
 use rocket::{routes, Request};
+use std::path::Path;
 
 fn init_base_dirs() -> std::io::Result<()> {
     std::fs::create_dir_all(manager::PARENTS_DIR)?;
     std::fs::create_dir_all(manager::MAPS_DIR)?;
+    std::fs::create_dir_all(manager::DATA_TMP_FILES_DIR)?;
     std::fs::create_dir_all(manager::TEMPLATES_DIR)
 }
 
@@ -35,6 +37,8 @@ fn rocket() -> _ {
     init_base_dirs().expect("Failed to create base directories");
 
     let config = Config::new("admin", "admin", "localhost:5000", "localhost:8000");
+
+    std::env::set_var("TMPDIR", manager::DATA_TMP_FILES_DIR);
 
     let limits = Limits::default()
         .limit("file", 100.megabytes())
