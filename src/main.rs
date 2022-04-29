@@ -1,19 +1,21 @@
 #[macro_use]
 extern crate rocket;
 
+use std::path::Path;
+
+use rocket::data::{Limits, ToByteUnit};
+use rocket::http::Status;
+use rocket::{routes, Request};
+
+use crate::config::Config;
+use crate::utils::api_error::ApiError;
+
 mod config;
 mod manager;
 mod maps;
 mod parents;
 mod templates;
 mod utils;
-
-use crate::config::Config;
-use crate::utils::api_error::ApiError;
-use rocket::data::{Limits, ToByteUnit};
-use rocket::http::Status;
-use rocket::{routes, Request};
-use std::path::Path;
 
 fn init_base_dirs() -> std::io::Result<()> {
     std::fs::create_dir_all(manager::PARENTS_DIR)?;
@@ -55,6 +57,8 @@ fn rocket() -> _ {
         .mount(
             "/parents",
             routes![
+                parents::routes::get_parent,
+                parents::routes::get_parents,
                 parents::routes::create,
                 parents::routes::push_plugin,
                 parents::routes::push_file
@@ -75,6 +79,10 @@ fn rocket() -> _ {
         )
         .mount(
             "/maps",
-            routes![maps::routes::push_map, maps::routes::get_map],
+            routes![
+                maps::routes::push_map,
+                maps::routes::get_map,
+                maps::routes::get_maps
+            ],
         )
 }
