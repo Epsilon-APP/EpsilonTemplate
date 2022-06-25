@@ -76,7 +76,7 @@ async fn build_template_dockerfile(
         ..Default::default()
     };
 
-    let dockerfile_path = "./docker/Dockerfile";
+    let dockerfile_path = "./data/Dockerfile";
     let mut dockerfile = File::open(&dockerfile_path).unwrap();
 
     let tmp_path_str = format!("{}/{}", manager::TMP_DIR, template_name);

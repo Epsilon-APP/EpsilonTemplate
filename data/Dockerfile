@@ -1,4 +1,4 @@
-FROM openjdk:8-jdk-alpine3.7
+FROM openjdk:15-jdk-alpine
 
 ARG TEMPLATE_NAME
 ENV TEMPLATE_NAME $TEMPLATE_NAME
