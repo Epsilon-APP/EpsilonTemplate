@@ -156,24 +156,17 @@ fn write_paths_in_zip(
             .skip_while(|s| *s != prefix_path)
             .skip(1)
             .collect();
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
         if path.is_dir() {
-            zip.add_directory(
-                path_without_prefix.to_str().unwrap(),
-                FileOptions::default(),
-            )?
+            zip.add_directory(path_without_prefix.to_str().unwrap(), options)?
         } else if path.is_file() {
             let mut file = File::open(&path)?;
             let mut buffer = Vec::new();
 
             file.read_to_end(&mut buffer)?;
 
-            print!("{}", buffer.len());
-
-            zip.start_file(
-                path_without_prefix.to_str().unwrap(),
-                FileOptions::default(),
-            )?;
+            zip.start_file(path_without_prefix.to_str().unwrap(), options)?;
 
             zip.write_all(&buffer)?
         }
