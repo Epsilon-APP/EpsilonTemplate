@@ -1,5 +1,7 @@
 FROM rust:latest
 
+ENV RUST_BACKTRACE=full
+
 WORKDIR /app
 
 COPY ./ ./
