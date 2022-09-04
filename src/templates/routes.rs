@@ -1,199 +1,28 @@
-use bollard::auth::DockerCredentials;
-use bollard::image::{BuildImageOptions, PushImageOptions, RemoveImageOptions};
-use bollard::Docker;
-use futures_util::StreamExt;
-use glob::Paths;
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::serde::json::serde_json::json;
 use rocket::serde::json::{serde_json, Json};
 use rocket::State;
-use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Write};
-use std::path::{Path, PathBuf};
-use tar::Builder;
-use zip::write::FileOptions;
+use std::path::Path;
 use zip::ZipWriter;
 
-use crate::parents::parent::Parent;
+use crate::responses::api_error::ApiError;
+use crate::responses::api_success::ApiSuccess;
+use crate::responses::file_upload::Upload;
 use crate::templates::template::Template;
-use crate::utils::api_error::ApiError;
-use crate::utils::api_success::ApiSuccess;
-use crate::utils::file_upload::Upload;
-use crate::{manager, Config};
+use crate::{global, parents, Config, maps};
+
+use super::{manager, utils};
 
 fn init_dirs(name: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(manager::get_template_plugins_path(name))
 }
 
-fn get_template_obj(name: &str) -> Result<Template, Error> {
-    let details_file_path_str = manager::get_details_file_path(name);
-    let file = File::open(&details_file_path_str)?;
-
-    Ok(serde_json::from_reader(&file)?)
-}
-
-fn get_template_parent_obj(template: &Template) -> Result<Parent, Error> {
-    let parent_file_path_str = manager::get_parent_file_path(&template.parent);
-    let file = File::open(&parent_file_path_str)?;
-
-    Ok(serde_json::from_reader(&file)?)
-}
-
-async fn build_template_dockerfile(
-    current_template: &Template,
-    config: &Config,
-) -> Result<(), Error> {
-    let docker = Docker::connect_with_socket_defaults().unwrap();
-
-    let resources = &current_template.resources;
-    let minimum_resources = &resources.minimum;
-    let maximum_resources = &resources.maximum;
-
-    let template_name = &current_template.name;
-
-    let image_name = format!("{}/{}:latest", config.registry_host, template_name);
-    let mut build_args = HashMap::new();
-
-    build_args.insert("TEMPLATE_NAME", template_name.as_str());
-    build_args.insert("DEFAULT_MAP_NAME", current_template.default_map.as_str());
-    build_args.insert("API_HOST", config.api_host.as_str());
-
-    let build_options = BuildImageOptions {
-        dockerfile: "Dockerfile",
-        t: &image_name,
-        buildargs: build_args,
-        rm: true,
-        forcerm: true,
-        pull: true,
-        ..Default::default()
-    };
-
-    let dockerfile_path = "./data/Dockerfile";
-    let mut dockerfile = File::open(&dockerfile_path).unwrap();
-
-    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, template_name);
-
-    std::fs::create_dir_all(&tmp_path_str)?;
-
-    let archive_file_path_str = format!("{}/{}.tar", tmp_path_str, template_name);
-    let archive_file = File::create(&archive_file_path_str)?;
-
-    let mut builder = Builder::new(archive_file);
-
-    builder.append_file("Dockerfile", &mut dockerfile)?;
-
-    builder.finish()?;
-
-    let mut contents = Vec::new();
-    File::open(&archive_file_path_str)?
-        .read_to_end(&mut contents)
-        .unwrap();
-
-    let mut build_stream = docker.build_image(build_options, None, Some(contents.into()));
-
-    while let Some(build_info) = build_stream.next().await {
-        let build_info = build_info.map_err(|err| Error::new(ErrorKind::Other, err))?;
-
-        if let Some(error) = build_info.error {
-            return Err(Error::new(ErrorKind::Other, error));
-        }
-    }
-
-    let credentials = DockerCredentials {
-        username: Some(String::from(&config.registry_username)),
-        password: Some(String::from(&config.registry_password)),
-        ..Default::default()
-    };
-
-    let mut push_stream = docker.push_image(
-        &image_name,
-        None::<PushImageOptions<String>>,
-        Some(credentials),
-    );
-
-    while let Some(push_info) = push_stream.next().await {
-        let push_info = push_info.map_err(|err| Error::new(ErrorKind::Other, err))?;
-
-        if let Some(error) = push_info.error {
-            return Err(Error::new(ErrorKind::Other, error));
-        }
-    }
-
-    let remove_image_options = RemoveImageOptions {
-        force: true,
-        ..Default::default()
-    };
-
-    let remove_image_stream = docker
-        .remove_image(&image_name, Some(remove_image_options), None)
-        .await
-        .map_err(|err| Error::new(ErrorKind::Other, err))?;
-
-    if remove_image_stream.is_empty() {
-        return Err(Error::new(ErrorKind::Other, "Failed to remove image"));
-    }
-
-    Ok(())
-}
-
-fn write_paths_in_zip(
-    zip: &mut ZipWriter<File>,
-    paths: Paths,
-    prefix_path: &str,
-) -> Result<(), Error> {
-    for glob_result in paths {
-        let path = glob_result.unwrap();
-        let path_without_prefix: PathBuf = path
-            .iter()
-            .skip_while(|s| *s != prefix_path)
-            .skip(1)
-            .collect();
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
-
-        if path.is_dir() {
-            zip.add_directory(path_without_prefix.to_str().unwrap(), options)?
-        } else if path.is_file() {
-            let mut file = File::open(&path)?;
-            let mut buffer = Vec::new();
-
-            file.read_to_end(&mut buffer)?;
-
-            zip.start_file(path_without_prefix.to_str().unwrap(), options)?;
-
-            zip.write_all(&buffer)?
-        }
-    }
-
-    Ok(())
-}
-
 #[get("/")]
 pub async fn get_templates() -> Result<ApiSuccess, ApiError> {
-    let mut templates: Vec<Template> = Vec::new();
-
-    let template_directories = std::fs::read_dir(manager::TEMPLATES_DIR)
-        .map_err(|err| ApiError::default(err.to_string().as_str()))?
-        .filter_map(|dir| dir.ok())
-        .filter(|dir| dir.path().is_dir());
-
-    for dir in template_directories {
-        let directory_path = dir.path();
-        let directory_name_os_str = directory_path.file_name().unwrap();
-        let directory_name = directory_name_os_str.to_str().unwrap();
-        let current_template_result = get_template_obj(directory_name);
-
-        if let Ok(..) = current_template_result {
-            let mut current_template = current_template_result.unwrap();
-            let current_template_parent = get_template_parent_obj(&current_template)
-                .map_err(|err| ApiError::default(err.to_string().as_str()))?;
-
-            current_template.t = Some(current_template_parent.t);
-
-            templates.push(current_template);
-        }
-    }
+    let templates =
+        manager::get_templates().map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::data(json!(templates)))
 }
@@ -207,10 +36,10 @@ pub async fn get_template(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let mut current_template =
-        get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+    let mut current_template = manager::get_template_obj(&name)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    let current_template_parent = get_template_parent_obj(&current_template)
+    let current_template_parent = manager::get_template_parent_obj(&current_template)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     current_template.t = Some(current_template_parent.t);
@@ -222,7 +51,7 @@ pub async fn get_template(name: String) -> Result<ApiSuccess, ApiError> {
 pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
     let template = data.into_inner();
 
-    if !manager::parent_exist(&template.parent) {
+    if !parents::manager::parent_exist(&template.parent) {
         return Err(ApiError::new(
             "The specified parent doesn't exist.",
             Status::BadRequest,
@@ -241,7 +70,7 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
     let maps_name = &template.maps;
 
     for map_name in maps_name {
-        if !manager::map_exist(map_name) {
+        if !maps::manager::map_exist(map_name) {
             return Err(ApiError::new(
                 "A specified map doesn't exist.",
                 Status::BadRequest,
@@ -260,6 +89,23 @@ pub async fn create(data: Json<Template>) -> Result<ApiSuccess, ApiError> {
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::default("The template has been created."))
+}
+
+#[delete("/<name>/delete")]
+pub async fn delete(name: String) -> Result<ApiSuccess, ApiError> {
+    if !manager::template_exist(&name) {
+        return Err(ApiError::new(
+            "The template doesn't exist.",
+            Status::NotFound,
+        ));
+    }
+
+    let template_path_str = manager::get_template_path(&name);
+
+    std::fs::remove_dir_all(template_path_str)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    Ok(ApiSuccess::default("The template has been deleted."))
 }
 
 #[put("/<name>/update", data = "<data>")]
@@ -291,7 +137,7 @@ pub async fn update(
     serde_json::to_writer_pretty(new_details_file, &template)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    build_template_dockerfile(&template, config)
+    utils::build_template_dockerfile(&template, config)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
@@ -320,7 +166,7 @@ pub async fn push_plugin(name: String, mut data: Form<Upload<'_>>) -> Result<Api
 
     Ok(ApiSuccess::default("The plugin has been pushed."))
 }
-//
+
 #[post("/<name>/main/push", data = "<data>")]
 pub async fn push_file(name: String, mut data: Form<Upload<'_>>) -> Result<ApiSuccess, ApiError> {
     if !manager::template_exist(&name) {
@@ -354,19 +200,19 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
     }
 
     let template_path = manager::get_template_path(&name);
-    let template =
-        get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+    let template = manager::get_template_obj(&name)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
     let template_parent_name = template.parent;
 
-    if !manager::parent_exist(&template_parent_name) {
+    if !parents::manager::parent_exist(&template_parent_name) {
         return Err(ApiError::new(
             "The template's parent doesn't exist.",
             Status::NotFound,
         ));
     }
 
-    let tmp_path_str = format!("{}/{}", manager::TMP_DIR, name);
-    let template_parent_path = manager::get_parent_path(&template_parent_name);
+    let tmp_path_str = format!("{}/{}", global::TMP_DIR, name);
+    let template_parent_path = parents::manager::get_parent_path(&template_parent_name);
 
     std::fs::create_dir_all(&tmp_path_str)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
@@ -381,10 +227,10 @@ pub async fn to_zip(name: String) -> Result<File, ApiError> {
 
     let mut zip = ZipWriter::new(file);
 
-    write_paths_in_zip(&mut zip, parent_paths, template_parent_name.as_str())
+    utils::write_paths_in_zip(&mut zip, parent_paths, template_parent_name.as_str())
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    write_paths_in_zip(&mut zip, template_paths, &name)
+    utils::write_paths_in_zip(&mut zip, template_paths, &name)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     zip.finish()
@@ -402,10 +248,10 @@ pub async fn build(name: String, config: &State<Config>) -> Result<ApiSuccess, A
         ));
     }
 
-    let current_template =
-        get_template_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+    let current_template = manager::get_template_obj(&name)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
-    build_template_dockerfile(&current_template, config)
+    utils::build_template_dockerfile(&current_template, config)
         .await
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 

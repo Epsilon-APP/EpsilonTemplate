@@ -1,32 +1,26 @@
 use std::fs::File;
-use std::io::Error;
 
 use rocket::form::Form;
 use rocket::serde::json::serde_json::json;
 use rocket::serde::json::{serde_json, Json};
 
 use crate::parents::parent::Parent;
-use crate::utils::api_error::ApiError;
-use crate::utils::api_success::ApiSuccess;
-use crate::utils::file_upload::Upload;
-use crate::{manager, Status};
+use crate::responses::api_error::ApiError;
+use crate::responses::api_success::ApiSuccess;
+use crate::responses::file_upload::Upload;
+use crate::{global, templates, Status};
+
+use super::manager;
 
 fn init_dirs(name: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(manager::get_parent_plugins_path(name))
-}
-
-fn get_parent_obj(name: &str) -> Result<Parent, Error> {
-    let parent_file_path_str = manager::get_parent_file_path(name);
-    let file = File::open(&parent_file_path_str)?;
-
-    Ok(serde_json::from_reader(&file)?)
 }
 
 #[get("/")]
 pub async fn get_parents() -> Result<ApiSuccess, ApiError> {
     let mut parents: Vec<Parent> = Vec::new();
 
-    let parent_directories = std::fs::read_dir(manager::PARENTS_DIR)
+    let parent_directories = std::fs::read_dir(global::PARENTS_DIR)
         .map_err(|err| ApiError::default(err.to_string().as_str()))?
         .filter_map(|dir| dir.ok())
         .filter(|dir| dir.path().is_dir());
@@ -35,7 +29,7 @@ pub async fn get_parents() -> Result<ApiSuccess, ApiError> {
         let directory_path = dir.path();
         let directory_name_os_str = directory_path.file_name().unwrap();
         let directory_name = directory_name_os_str.to_str().unwrap();
-        let current_parent_result = get_parent_obj(directory_name);
+        let current_parent_result = manager::get_parent_obj(directory_name);
 
         if let Ok(..) = current_parent_result {
             parents.push(current_parent_result.unwrap());
@@ -54,8 +48,8 @@ pub async fn get_parent(name: String) -> Result<ApiSuccess, ApiError> {
         ));
     }
 
-    let current_parent =
-        get_parent_obj(&name).map_err(|err| ApiError::default(err.to_string().as_str()))?;
+    let current_parent = manager::get_parent_obj(&name)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::data(json!(current_parent)))
 }
@@ -79,6 +73,39 @@ pub async fn create(data: Json<Parent>) -> Result<ApiSuccess, ApiError> {
         .map_err(|err| ApiError::default(err.to_string().as_str()))?;
 
     Ok(ApiSuccess::default("The parent has been created."))
+}
+
+#[delete("/<name>/delete")]
+pub async fn delete(name: String) -> Result<ApiSuccess, ApiError> {
+    if !manager::parent_exist(&name) {
+        return Err(ApiError::new("The parent doesn't exist.", Status::NotFound));
+    }
+
+    let templates = templates::manager::get_templates()
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    let mut template_using_parent = false;
+
+    for template in templates {
+        if template.parent == name {
+            template_using_parent = true;
+            break;
+        }
+    }
+
+    if template_using_parent {
+        return Err(ApiError::new(
+            "Some templates are using this parent.",
+            Status::Conflict,
+        ));
+    }
+
+    let parent_path = manager::get_parent_path(&name);
+
+    std::fs::remove_dir_all(parent_path)
+        .map_err(|err| ApiError::default(err.to_string().as_str()))?;
+
+    Ok(ApiSuccess::default("The parent has been deleted."))
 }
 
 #[post("/<name>/plugins/push", data = "<data>")]

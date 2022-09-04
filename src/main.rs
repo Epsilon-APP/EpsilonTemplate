@@ -1,27 +1,25 @@
 #[macro_use]
 extern crate rocket;
 
-use std::path::Path;
-
 use rocket::data::{Limits, ToByteUnit};
 use rocket::http::Status;
 use rocket::{routes, Request};
 
 use crate::config::Config;
-use crate::utils::api_error::ApiError;
+use crate::responses::api_error::ApiError;
 
 mod config;
-mod manager;
+mod global;
 mod maps;
 mod parents;
+mod responses;
 mod templates;
-mod utils;
 
 fn init_base_dirs() -> std::io::Result<()> {
-    std::fs::create_dir_all(manager::PARENTS_DIR)?;
-    std::fs::create_dir_all(manager::MAPS_DIR)?;
-    std::fs::create_dir_all(manager::DATA_TMP_FILES_DIR)?;
-    std::fs::create_dir_all(manager::TEMPLATES_DIR)
+    std::fs::create_dir_all(global::PARENTS_DIR)?;
+    std::fs::create_dir_all(global::MAPS_DIR)?;
+    std::fs::create_dir_all(global::DATA_TMP_FILES_DIR)?;
+    std::fs::create_dir_all(global::TEMPLATES_DIR)
 }
 
 #[get("/ping")]
@@ -40,7 +38,7 @@ fn rocket() -> _ {
 
     let config = Config::new("admin", "admin", "localhost:5000", "localhost:8000");
 
-    std::env::set_var("TMPDIR", manager::DATA_TMP_FILES_DIR);
+    std::env::set_var("TMPDIR", global::DATA_TMP_FILES_DIR);
 
     let limits = Limits::default()
         .limit("file", 100.megabytes())
@@ -60,6 +58,7 @@ fn rocket() -> _ {
                 parents::routes::get_parent,
                 parents::routes::get_parents,
                 parents::routes::create,
+                parents::routes::delete,
                 parents::routes::push_plugin,
                 parents::routes::push_file
             ],
@@ -70,6 +69,7 @@ fn rocket() -> _ {
                 templates::routes::get_template,
                 templates::routes::get_templates,
                 templates::routes::create,
+                templates::routes::delete,
                 templates::routes::update,
                 templates::routes::push_plugin,
                 templates::routes::push_file,
@@ -80,6 +80,7 @@ fn rocket() -> _ {
         .mount(
             "/maps",
             routes![
+                maps::routes::delete,
                 maps::routes::push_map,
                 maps::routes::get_map,
                 maps::routes::get_maps
