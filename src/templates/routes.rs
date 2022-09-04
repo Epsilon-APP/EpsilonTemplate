@@ -51,9 +51,6 @@ async fn build_template_dockerfile(
     let minimum_resources = &resources.minimum;
     let maximum_resources = &resources.maximum;
 
-    let min_ram = &minimum_resources.ram.to_string();
-    let max_ram = &maximum_resources.ram.to_string();
-
     let template_name = &current_template.name;
 
     let image_name = format!("{}/{}:latest", config.registry_host, template_name);
@@ -62,9 +59,6 @@ async fn build_template_dockerfile(
     build_args.insert("TEMPLATE_NAME", template_name.as_str());
     build_args.insert("DEFAULT_MAP_NAME", current_template.default_map.as_str());
     build_args.insert("API_HOST", config.api_host.as_str());
-
-    build_args.insert("MIN_RAM", min_ram.as_str());
-    build_args.insert("MAX_RAM", max_ram.as_str());
 
     let build_options = BuildImageOptions {
         dockerfile: "Dockerfile",
