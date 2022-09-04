@@ -20,11 +20,6 @@ pub async fn build_template_dockerfile(
     config: &Config,
 ) -> Result<(), Error> {
     let docker = Docker::connect_with_socket_defaults().unwrap();
-
-    let resources = &current_template.resources;
-    let _minimum_resources = &resources.minimum;
-    let _maximum_resources = &resources.maximum;
-
     let template_name = &current_template.name;
 
     let image_name = format!("{}/{}:latest", config.registry_host, template_name);
