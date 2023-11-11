@@ -46,7 +46,8 @@ fn rocket() -> _ {
 
     let rocket_config = rocket::Config::figment()
         .merge(("address", "0.0.0.0"))
-        .merge(("limits", limits));
+        .merge(("limits", limits))
+        .merge(("log_level", "debug"));
 
     rocket::custom(rocket_config)
         .register("/", catchers![default_catcher])

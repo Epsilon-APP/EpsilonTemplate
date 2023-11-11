@@ -27,7 +27,7 @@ pub fn parent_exist(name: &str) -> bool {
 
 pub fn get_parent_obj(name: &str) -> Result<Parent, Error> {
     let parent_file_path_str = get_parent_file_path(name);
-    let file = File::open(&parent_file_path_str)?;
+    let file = File::open(parent_file_path_str)?;
 
     Ok(serde_json::from_reader(&file)?)
 }

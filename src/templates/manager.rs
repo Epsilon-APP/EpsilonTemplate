@@ -35,14 +35,14 @@ pub fn get_templates() -> Result<Vec<Template>, Error> {
 
 pub fn get_template_obj(name: &str) -> Result<Template, Error> {
     let details_file_path_str = get_details_file_path(name);
-    let file = File::open(&details_file_path_str)?;
+    let file = File::open(details_file_path_str)?;
 
     Ok(serde_json::from_reader(&file)?)
 }
 
 pub fn get_template_parent_obj(template: &Template) -> Result<Parent, Error> {
     let parent_file_path_str = parents::manager::get_parent_file_path(&template.parent);
-    let file = File::open(&parent_file_path_str)?;
+    let file = File::open(parent_file_path_str)?;
 
     Ok(serde_json::from_reader(&file)?)
 }

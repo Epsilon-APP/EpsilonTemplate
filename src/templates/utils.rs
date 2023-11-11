@@ -11,9 +11,9 @@ use tar::Builder;
 use zip::write::FileOptions;
 use zip::ZipWriter;
 
+use super::template::Template;
 use crate::config::Config;
 use crate::global;
-use super::template::Template;
 
 pub async fn build_template_dockerfile(
     current_template: &Template,
@@ -40,7 +40,7 @@ pub async fn build_template_dockerfile(
     };
 
     let dockerfile_path = "./data/Dockerfile";
-    let mut dockerfile = File::open(&dockerfile_path).unwrap();
+    let mut dockerfile = File::open(dockerfile_path).unwrap();
 
     let tmp_path_str = format!("{}/{}", global::TMP_DIR, template_name);
 
